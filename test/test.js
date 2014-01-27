@@ -119,30 +119,24 @@ function runTests() {
 
   test('Normalize - backwards compat', System.normalize('./a.js'), 'a.js');
 
-  /*
   test('Normalize - URL', function(assert) {
     try {
-      assert(System.normalize('http://example.org/a/b.html'), 'http://example.org/a/b.html');
+      System.normalize('http://example.org/a/b.html');
     }
     catch(e) {
-      assert(e, 'http://example.org/a/b.html');
+      assert();
     }
   });
-
-  test('Normalize - Canonicalize URL', function(assert) {
-    try {
-      assert(System.normalize('http://example.org/a/../b.html'), 'http://example.org/b.html');
-    }
-    catch(e) {
-      assert(e, 'http://example.org/b.html')
-    }
-  });
-  */
 
   System.baseURL = 'http://example.org/a/';
 
   test('Locate', System.locate({ name: '@abc/def' }), 'http://example.org/a/@abc/def.js');
   test('Locate', System.locate({ name: 'abc/def' }), 'http://example.org/a/abc/def.js');
+
+  // paths
+  System.paths['path/*'] = '/test/*.js';
+  test('Locate paths', System.locate({ name: 'path/test' }), 'http://example.org/test/test.js');
+
 
   System.baseURL = oldBaseURL;
 
@@ -184,6 +178,8 @@ function runTests() {
   test('Import ES6 with dep', function(assert) {
     System.import('syntax/es6-withdep').then(function(m) {
       assert(m.p, 'p');
+    }, function(e) {
+      console.log(e);
     });
   });
 
@@ -287,7 +283,7 @@ function runTests() {
         [m.q, 4],
         [m.z, 5]
       );
-    }, function(err) {
+    }).catch(function(err) {
       console.log('error');
       console.log(err);
     });
@@ -314,17 +310,81 @@ function runTests() {
     });
   });
 
+  test('Module Name meta', function(assert) {
+    System.import('loader/moduleName').then(function(m) {
+      assert(
+        [m.name, 'loader/moduleName']
+      );
+    })
+  });
+
+  test('Custom path', function(assert) {
+    System.paths['bar'] = 'loader/custom-path.js';
+    System.import('bar').then(function(m) {
+      assert(m.bar, 'bar');
+    })
+  });
+
+  test('Custom path wildcard', function(assert) {
+    System.paths['bar/*'] = 'loader/custom-folder/*.js';
+    System.import('bar/path').then(function(m) {
+      assert(m.bar, 'baa');
+    });
+  });
+
+  test('Custom path most specific', function(assert) {
+    System.paths['bar/bar'] = 'loader/specific-path.js';
+    System.import('bar/bar').then(function(m) {
+      assert(m.path, true);
+    });
+  });
+
 
   var customLoader = new Loader({
-    normalize: System.normalize,
+    normalize: function(name, parentName, parentAddress) {
+      return new Promise(function(resolve, reject) {
+        if (name == 'asdfasdf') {
+          return setTimeout(function() {
+            resolve('loader/async-norm');
+          }, 500);
+        }
+        
+        if (name == 'error1')
+          return setTimeout(function(){ reject('error1'); }, 100);
+
+        var normalized = System.normalize(name, parentName, parentAddress);
+        resolve(normalized);
+      });
+    },
     locate: function(load) {
+        if (load.name == 'error2')
+          return new Promise(function(resolve, reject) {
+            setTimeout(function(){ reject('error2'); }, 100);
+          });
+
       if (load.name.substr(0, 5) == 'path/')
         load.name = 'loader/' + load.name.substr(5);
       return System.locate(load);
     },
-    fetch: System.fetch,
-    translate: System.translate,
+    fetch: function(load) {
+      if (load.name == 'error3')
+        throw 'error3';
+      if (load.name == 'error4' || load.name == 'error5')
+        return 'asdf';
+      return System.fetch.apply(this, arguments);
+    },
+    translate: function(load) {
+      if (load.name == 'error4')
+        return new Promise(function(resolve, reject) {
+          setTimeout(function(){ reject('error4'); }, 100);
+        });
+      return System.translate.apply(this, arguments);
+    },
     instantiate: function(load) {
+      if (load.name == 'error5')
+        return new Promise(function(resolve, reject) {
+          setTimeout(function(){ reject('error5'); }, 100);
+        });
       // very bad AMD support
       if (load.source.indexOf('define') == -1)
         return System.instantiate(load);
@@ -338,16 +398,22 @@ function runTests() {
       return {
         deps: deps,
         execute: function() {
-          return new Module(factory.apply(null, arguments));
+          var deps = [];
+          for (var i = 0; i < arguments.length; i++)
+            deps.push(customLoader.get(arguments[i]));
+          return new Module(factory.apply(null, deps));
         }
       }
     }
   });
 
+
   test('Custom loader standard load', function(assert) {
-    customLoader.import('loader/test').then(function(m) {
+    var p = customLoader.import('loader/test').then(function(m) {
       assert(m.loader, 'custom');
     });
+    if (p.catch)
+      p.catch(function() {});
   });
   test('Custom loader special rules', function(assert) {
     customLoader.import('path/custom').then(function(m) {
@@ -357,6 +423,41 @@ function runTests() {
   test('Custom loader AMD support', function(assert) {
     customLoader.import('loader/amd').then(function(m) {
       assert(m.format, 'amd');
+    });
+  });
+  test('Custom loader hook - normalize error', function(assert) {
+    customLoader.import('loader/error1-parent').then(function(m) {
+      console.log('got n');
+    }).catch(function(e) {
+      assert(e, 'error1');
+    });
+  });
+  test('Custom loader hook - locate error', function(assert) {
+    customLoader.import('error2').then(function(m) {}, function(e) {
+      assert(e, 'error2');
+    });
+  });
+  test('Custom loader hook - fetch error', function(assert) {
+    customLoader.import('error3').then(function(m) {}, function(e) {
+      assert(e, 'error3');
+    });
+  });
+  test('Custom loader hook - translate error', function(assert) {
+    customLoader.import('error4').then(function(m) {}, function(e) {
+      assert(e, 'error4');
+    });
+  });
+  test('Custom loader hook - instantiate error', function(assert) {
+    customLoader.import('error5').then(function(m) {}, function(e) {
+      assert(e, 'error5');
+    });
+  });
+
+  test('Async Normalize', function(assert) {
+    customLoader.normalize('asdfasdf').then(function(normalized) {
+      return customLoader.import(normalized);
+    }).then(function(m) {
+      assert(m.n, 'n');
     });
   });
 }

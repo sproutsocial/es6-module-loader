@@ -30,7 +30,7 @@ Then include the `es6-module-loader.js` file on its own in the page:
   <script src="es6-module-loader.js"></script>
 ```
 
-Traceur will be downloaded only when needed for ES6 syntax parsing, detected as the existence of module syntax, or as specified by the `metadata.es6` property.
+Traceur will be downloaded only when needed for ES6 syntax parsing, detected as the existence of module syntax, or as specified by the `metadata.es6 = true` property.
 
 Write an ES6 module:
 
@@ -65,6 +65,16 @@ Or we can also use the dynamic loader:
 ```
 
 The dynamic loader returns an instance of the `Module` class, which contains getters for the named exports (in this case, `q`).
+
+Note that the dynamic module loader uses promises for resolution. Modules can have both a resolve and reject handler:
+
+```javascript
+  System.import('some-module').then(function(m) {
+    // got Module instance m
+  }, function(err) {
+    // error
+  });
+```
 
 ## Terminology
 
@@ -186,15 +196,29 @@ module crypto from 'crypto';            // import an entire module instance obje
 
 Note that any valid declaration can be exported. In ES6, this includes `class` (as in the example above), `const`, and `let`.
 
-## Dynamic Module Loading
+## Paths Implementation
 
-The dynamic module loader uses promises for resolution. Modules can have both a resolve and reject handler:
+_Note: This is a specification under discussion and not at all confirmed. This implementation will likely change._
+
+The System loader provides paths rules used by the standard `locate` function.
+
+For example, we might want to load `jquery` from a CDN location. For this we can provide a paths rule:
 
 ```javascript
-  System.import('some-module').then(function(m) {
-    // got Module instance m
-  }, function(err) {
-    // error
+  System.paths['jquery'] = '//code.jquery.com/jquery-1.10.2.min.js';
+  System.import('jquery').then(function($) {
+    // ...
+  });
+```
+
+Any reference to `jquery` in other modules will also use this same version.
+
+It is also possible to define wildcard paths rules. The most specific rule will be used:
+
+```javascript
+  System.paths['lodash/*'] = '/js/lodash/*.js'
+  System.import('lodash/map').then(function(map) {
+    // ...
   });
 ```
 
@@ -251,7 +275,7 @@ For use in NodeJS, the `Module`, `Loader` and `System` globals are provided as e
 ```javascript
   var System = require('es6-module-loader').System;
   
-  System.import('some-module', callback);
+  System.import('some-module').then(callback);
 ```
 
 Traceur support requires `npm install traceur`, allowing ES6 syntax in NodeJS:
@@ -259,7 +283,7 @@ Traceur support requires `npm install traceur`, allowing ES6 syntax in NodeJS:
 ```javascript
   var System = require('es6-module-loader').System;
 
-  System.import('es6-file', function(module) {
+  System.import('es6-file').then(function(module) {
     module.classMethod();
   });
 ```
@@ -311,7 +335,10 @@ var MyLoader = new Loader({
     // useful for providing AMD and CJS support
     return {
       deps: ['some', 'dependencies'],
-      execute: function(depA, depB) {
+      execute: function(depNameA, depNameB) {
+        // depNameA, depNameB normalized names
+        var depA = MyLoader.get(depNameA);
+        var depB = MyLoader.get(depNameB);
         return new Module({
           some: 'export'
         });
@@ -323,6 +350,7 @@ var MyLoader = new Loader({
 
 For a more in-depth overview of creating with custom loaders, some resources are provided below:
 * The [System Loader implementation](https://github.com/ModuleLoader/es6-module-loader/blob/master/lib/es6-module-loader.js#L804)
+* [ES6 Loader API guide](https://gist.github.com/dherman/7568080)
 * [ES6 Module Specification, latest draft](https://github.com/jorendorff/js-loaders/blob/e60d3651/specs/es6-modules-2013-12-02.pdf)
 * [Yehuda Katz's essay](https://gist.github.com/wycats/51c96e3adcdb3a68cbc3) (outdated)
 
@@ -344,7 +372,7 @@ Notes on the exact specification implementation differences are included below.
 
 * With this assumption, instead of Link, LinkDynamicModules is run directly
 
-* ES6 support is thus provided through the translate function of the System loader
+* ES6 support is thus provided through the instantiate function of the System loader
 
 * EnsureEvaluated is removed, but may in future implement dynamic execution pending 
   issue - https://github.com/jorendorff/js-loaders/issues/63
@@ -372,7 +400,7 @@ Notes on the exact specification implementation differences are included below.
 
 * The `<script type="module">` tag is supported, but the `<module>` tag is not
 
-* ondemand / paths functionality currently not yet implemented
+* The implemented ondemand / paths functionality is provisional and subject to change
 
 To follow the current the specification changes, see the marked issues https://github.com/ModuleLoader/es6-module-loader/issues?labels=specification&page=1&state=open.
 
@@ -386,6 +414,8 @@ In lieu of a formal styleguide, take care to maintain the existing coding style.
 _Also, please don't edit files in the "dist" subdirectory as they are generated via grunt. You'll find source code in the "lib" subdirectory!_
 
 ## Release History
+* 0.4.2 promises fixes, __moduleName support, btoa language fixes, instantiation using normalized names as arguments
+* 0.4.1 various tests and bug fixes, paths config, native promises support, promises update, export * support without Traceur
 * 0.4.0 Update to revised specification exact algorithm
 * 0.3.3 Traceur parser update, detection regex fixes, better error messages
 * 0.3.2 Use Traceur for all parsing, module tag support, syntax updates, test workflow
@@ -393,6 +423,10 @@ _Also, please don't edit files in the "dist" subdirectory as they are generated 
 * 0.3.0 Traceur support, better error reporting, source maps support, normalization simplifications
 * 0.2.4 NodeJS support, relative normalization fixes, IE8 support
 
+## Credit
+Copyright (c) 2014 Luke Hoban, Addy Osmani, Guy Bedford
+
+Promises Integration from [Promiscuous](https://github.com/RubenVerborgh/promiscuous/), Copyright (c) 2013-2014 Ruben Verborgh, MIT License
+
 ## License
-Copyright (c) 2012 Luke Hoban, Addy Osmani, Guy Bedford  
 Licensed under the MIT license.
