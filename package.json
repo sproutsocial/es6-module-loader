@@ -1,7 +1,7 @@
 {
   "name": "es6-module-loader",
   "description": "An ES6 Module Loader shim",
-  "version": "0.4.0",
+  "version": "0.5.4",
   "homepage": "https://github.com/ModuleLoader/es6-module-loader",
   "author": {
     "name": "Guy Bedford, Luke Hoban, Addy Osmani",
@@ -24,7 +24,8 @@
   "devDependencies": {
     "grunt": "~0.4.1",
     "grunt-contrib-uglify": "~0.2.2",
-    "grunt-contrib-jshint": "~0.6.0"
+    "grunt-contrib-jshint": "~0.6.0",
+    "grunt-contrib-concat": "~0.3.0"
   },
   "keywords": [
     "script",
@@ -35,14 +36,11 @@
   "engines": {
     "node": ">=0.8.0"
   },
-  "main": "lib/es6-module-loader",
+  "main": "lib/index",
   "scripts": {
-    "test": "grunt test"
+    "test": "node test/test"
   },
-  "files": [
-    "lib/es6-module-loader.js"
-  ],
   "dependencies": {
-    "traceur": "0.0.8"
+    "traceur": "0.0.32"
   }
 }
