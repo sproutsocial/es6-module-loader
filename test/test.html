@@ -3,8 +3,23 @@
 
   <body></body>
 
+  <script>
+    // test promise polyfills
+    // window.Promise = null;
+  </script>
+
   <script src="test.js"></script>
-  <script src="../lib/es6-module-loader.js" data-init="runTests"></script>
+
+
+  <!-- set this to the path to traceur.js -->
+  <script src="../../traceur-compiler/bin/traceur.js"></script>
+
+  <!-- run Grunt first to create this file -->
+  <script src="../dist/es6-module-loader.js"></script>
+
+  <script>
+    runTests();
+  </script>
 
   <script type="module" name="named-module">
     class q {
@@ -23,16 +38,21 @@
     }
   </script>
 
-<!--
-  Not yet supported - see https://github.com/jorendorff/js-loaders/issues/83
-  <script type="module" src="loader/anon.js"></script>
+  <!-- 
+  Not yet supported
+  <script type="module" src="loader/anon.js"></script> 
+  -->
   <script type="module" name="named" src="loader/named.js"></script>
--->
+
   <script>
     setTimeout(function() {
       test('Named &lt;script type="module"> tag', function(assert) {
-        System.import('named-module').then(function(m) {
+        System['import']('named-module').then(function(m) {
           assert(m.p, 'hi');
+        }, function(e) {
+          setTimeout(function() {
+            throw e;
+          }, 1);
         });
       });
       test('Anonymous &lt;script type="module"> tag', function(assert) {
@@ -40,9 +60,10 @@
       });
       /* test('&lt;script type="module"> with src', function(assert) {
         assert(typeof window.anon2, 'function');
-      });
-      test('&lt;script type="module"> named with src', function(assert) {
-        assert(System.get('named').q == 'test');
       }); */
+      test('&lt;script type="module"> named with src', function(assert) {
+        assert(System.get('named').q,'test');
+      });
     }, 500);
   </script>
+
